@@ -1,0 +1,28 @@
+name: Squash commits to single commit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  squash:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Squash all commits
+        run: |
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          # Get the tree SHA of the current HEAD
+          TREE=$(git cat-file -p HEAD | grep tree | awk '{print $2}')
+          # Create a new orphan commit with the correct message
+          NEW_COMMIT=$(git commit-tree $TREE -m "feat: initial setup — AI video editing pipeline")
+          # Update the branch ref
+          git update-ref refs/heads/main $NEW_COMMIT
+          # Force push
+          git push --force origin main

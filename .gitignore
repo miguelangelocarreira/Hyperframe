@@ -1,0 +1,49 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+venv/
+.venv/
+env/
+
+# Outputs (vídeos processados, não commitar)
+edit/*.mp4
+edit/*.mov
+edit/*.avi
+edit/transcripts/
+edit/final.mp4
+edit/preview.mp4
+*.mp4
+*.mov
+*.avi
+*.wav
+*.mp3
+
+# Thumbnails e verificações visuais (não commitar)
+edit/*.png
+edit/*.jpg
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node (para HyperFrames)
+node_modules/
+npm-debug.log*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8"/>
+<title>Karaoke Subtitles Overlay</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; }
+
+  #stage {
+    width: 1920px;
+    height: 1080px;
+    position: relative;
+    background: transparent;
+  }
+
+  /*
+   * Legendas karaoke: palavra atual destacada, resto em branco.
+   * Alimentado por window.TRANSCRIPT — array de {text, start, end} word-level.
+   */
+  #subtitle-area {
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 0 160px;
+    min-height: 100px;
+  }
+
+  #line-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0 10px;
+    max-width: 1400px;
+  }
+
+  .palavra {
+    font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+    font-size: 56px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.5);
+    text-shadow: 0 3px 10px rgba(0,0,0,0.9);
+    transition: color 0.08s ease, transform 0.08s ease;
+    white-space: nowrap;
+    display: inline-block;
+  }
+
+  .palavra.ativa {
+    color: #ffffff;
+    transform: scale(1.05);
+  }
+
+  .palavra.passada {
+    color: rgba(255,255,255,0.25);
+  }
+</style>
+</head>
+<body>
+<div
+  id="stage"
+  data-composition-id="subtitles-karaoke"
+  data-width="1920"
+  data-height="1080"
+  data-fps="30"
+>
+  <div id="subtitle-area" data-start="0" data-duration="30">
+    <div id="line-wrap"></div>
+  </div>
+</div>
+
+<script>
+  /*
+   * TRANSCRIPT: array de palavras com timestamps.
+   * Injectar antes do render:
+   *   window.TRANSCRIPT = [
+   *     { text: "hoje", start: 0.0, end: 0.4 },
+   *     { text: "vou",  start: 0.4, end: 0.7 },
+   *     ...
+   *   ]
+   *
+   * Ou usar o formato do ElevenLabs Scribe (campo "words").
+   */
+  const raw = window.TRANSCRIPT || window.SCRIBE_DATA?.words || []
+
+  // Normalizar formato (Scribe vs simples)
+  const words = raw.filter(w => w.type !== 'audio_event').map(w => ({
+    text: w.text,
+    start: w.start,
+    end: w.end,
+  }))
+
+  // Calcular duração total
+  const DURATION = words.length > 0 ? Math.ceil(words[words.length - 1].end) + 1 : 10
+  const FPS = 30
+
+  // Construir elementos DOM por palavra
+  const wrap = document.getElementById('line-wrap')
+  const els = words.map((w, i) => {
+    const span = document.createElement('span')
+    span.className = 'palavra'
+    span.textContent = w.text
+    span.dataset.idx = i
+    wrap.appendChild(span)
+    return span
+  })
+
+  // Mostrar apenas as palavras relevantes para a janela atual (±5 palavras)
+  const WINDOW_SIZE = 10
+
+  function updateSubtitles(t) {
+    // Encontrar palavra atual
+    let activeIdx = -1
+    for (let i = 0; i < words.length; i++) {
+      if (t >= words[i].start && t < words[i].end) {
+        activeIdx = i
+        break
+      }
+    }
+
+    // Janela de palavras visíveis
+    const windowStart = Math.max(0, activeIdx - 3)
+    const windowEnd   = Math.min(words.length - 1, windowStart + WINDOW_SIZE)
+
+    els.forEach((el, i) => {
+      if (i < windowStart || i > windowEnd) {
+        el.style.display = 'none'
+      } else {
+        el.style.display = 'inline-block'
+        if (i < activeIdx) {
+          el.className = 'palavra passada'
+        } else if (i === activeIdx) {
+          el.className = 'palavra ativa'
+        } else {
+          el.className = 'palavra'
+        }
+      }
+    })
+  }
+
+  // ── Frame Adapter ──
+  if (window.__hf) {
+    window.__hf.registerFrameAdapter({
+      getDuration: () => DURATION,
+      seekToFrame: (frame) => {
+        const t = frame / FPS
+        updateSubtitles(t)
+      }
+    })
+  } else {
+    // Preview: animar em tempo real
+    const startTime = performance.now()
+    function animate() {
+      const t = (performance.now() - startTime) / 1000
+      updateSubtitles(t % DURATION)
+      requestAnimationFrame(animate)
+    }
+    animate()
+  }
+</script>
+</body>
+</html>

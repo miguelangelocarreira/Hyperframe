@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8"/>
+<title>Stat Counter Overlay</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; }
+
+  #stage {
+    width: 1920px;
+    height: 1080px;
+    position: relative;
+    background: transparent;
+  }
+
+  /*
+   * Contador de estatísticas animado — aparece no canto superior direito.
+   * Configurar via window.DADOS:
+   *   window.DADOS = [
+   *     { label: "Conversas", valor: 12847, sufixo: "" },
+   *     { label: "Taxa de resolução", valor: 94, sufixo: "%" },
+   *   ]
+   */
+  #stats-wrap {
+    position: absolute;
+    top: 80px;
+    right: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    opacity: 0;
+  }
+
+  .stat-card {
+    background: rgba(5, 25, 47, 0.85);
+    border: 1px solid rgba(30, 132, 199, 0.3);
+    border-left: 4px solid #1E84C7;
+    border-radius: 12px;
+    padding: 20px 28px;
+    backdrop-filter: blur(12px);
+    opacity: 0;
+    transform: translateX(40px);
+    min-width: 260px;
+  }
+
+  .stat-label {
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 18px;
+    font-weight: 500;
+    color: #a0b4c8;
+    margin-bottom: 6px;
+  }
+
+  .stat-valor {
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 52px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+<div
+  id="stage"
+  data-composition-id="stat-counter"
+  data-width="1920"
+  data-height="1080"
+  data-fps="30"
+>
+  <div id="stats-wrap" data-start="0.3" data-duration="5"></div>
+</div>
+
+<script>
+  const DADOS = window.DADOS || [
+    { label: 'Conversas totais', valor: 12847, sufixo: '' },
+    { label: 'Taxa de resolução', valor: 94, sufixo: '%' },
+    { label: 'Clientes ativos', valor: 47, sufixo: '' },
+  ]
+
+  const FPS = 30
+  const DURATION = 6
+
+  // Construir cards
+  const wrap = document.getElementById('stats-wrap')
+  const cardEls = []
+
+  DADOS.forEach((d, i) => {
+    const card = document.createElement('div')
+    card.className = 'stat-card'
+    card.innerHTML = `
+      <div class="stat-label">${d.label}</div>
+      <div class="stat-valor" id="val-${i}">0${d.sufixo}</div>
+    `
+    wrap.appendChild(card)
+    cardEls.push(card)
+  })
+
+  const tl = gsap.timeline({ paused: true })
+
+  // Fade in do contentor
+  tl.to('#stats-wrap', { opacity: 1, duration: 0 }, 0.3)
+
+  // Cards entram em stagger
+  tl.to('.stat-card', {
+    opacity: 1, x: 0, duration: 0.5,
+    stagger: 0.15, ease: 'power3.out'
+  }, 0.4)
+
+  // Contadores animados
+  DADOS.forEach((d, i) => {
+    const el = document.getElementById(`val-${i}`)
+    tl.to({ val: 0 }, {
+      val: d.valor,
+      duration: 1.2,
+      ease: 'power2.out',
+      onUpdate: function () {
+        const v = Math.round(this.targets()[0].val)
+        el.textContent = v.toLocaleString('pt-PT') + d.sufixo
+      }
+    }, 0.6 + i * 0.1)
+  })
+
+  // Saída
+  tl.to('.stat-card', { opacity: 0, x: 40, duration: 0.3, stagger: 0.08 }, 5.0)
+  tl.to('#stats-wrap', { opacity: 0, duration: 0 }, 5.8)
+
+  if (window.__hf) {
+    window.__hf.registerFrameAdapter({
+      getDuration: () => DURATION,
+      seekToFrame: (frame) => tl.seek(frame / FPS)
+    })
+  } else {
+    tl.play()
+  }
+</script>
+</body>
+</html>

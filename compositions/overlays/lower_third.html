@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8"/>
+<title>Lower Third Overlay</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; }
+
+  #stage {
+    width: 1920px;
+    height: 1080px;
+    position: relative;
+    /* Fundo transparente — este overlay compõe por cima do vídeo */
+    background: transparent;
+  }
+
+  /*
+   * Lower Third: barra no terço inferior com nome e cargo.
+   * Configurar via window.DADOS antes do render:
+   *   window.DADOS = { nome: "João Silva", cargo: "CEO da Empresa", cor: "#1E84C7" }
+   */
+  #lower-third {
+    position: absolute;
+    bottom: 120px;
+    left: 80px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    opacity: 0;
+  }
+
+  #barra-cor {
+    width: 6px;
+    height: 0;        /* começa em 0 — GSAP anima */
+    border-radius: 3px;
+    background: var(--cor, #1E84C7);
+    margin-right: 16px;
+  }
+
+  #texto-wrap {
+    overflow: hidden;
+  }
+
+  #nome {
+    font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+    font-size: 42px;
+    font-weight: 700;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    white-space: nowrap;
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+
+  #cargo {
+    font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+    font-size: 26px;
+    font-weight: 400;
+    color: var(--cor, #1E84C7);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+    white-space: nowrap;
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+</style>
+</head>
+<body>
+<div
+  id="stage"
+  data-composition-id="lower-third"
+  data-width="1920"
+  data-height="1080"
+  data-fps="30"
+>
+  <div id="lower-third" data-start="0.5" data-duration="4">
+    <div id="barra-cor"></div>
+    <div id="texto-wrap">
+      <div id="nome">Nome da Pessoa</div>
+      <div id="cargo">Cargo / Empresa</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Dados dinâmicos (injectar antes do render) ──
+  const DADOS = window.DADOS || {}
+  const nome  = DADOS.nome  || 'Nome da Pessoa'
+  const cargo = DADOS.cargo || 'Cargo / Empresa'
+  const cor   = DADOS.cor   || '#1E84C7'
+
+  document.getElementById('nome').textContent  = nome
+  document.getElementById('cargo').textContent = cargo
+  document.documentElement.style.setProperty('--cor', cor)
+
+  const FPS = 30
+  const DURATION = 5
+
+  const tl = gsap.timeline({ paused: true })
+
+  // Fade in do contentor
+  tl.to('#lower-third', { opacity: 1, duration: 0 }, 0.5)
+
+  // Barra cresce de cima para baixo
+  tl.to('#barra-cor', { height: 90, duration: 0.3, ease: 'power2.out' }, 0.5)
+
+  // Nome desliza da esquerda
+  tl.to('#nome', { opacity: 1, x: 0, duration: 0.4, ease: 'power3.out' }, 0.7)
+
+  // Cargo desliza logo a seguir
+  tl.to('#cargo', { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out' }, 0.9)
+
+  // Saída (ao segundo 4)
+  tl.to(['#nome', '#cargo'], { opacity: 0, x: -20, duration: 0.3 }, 4.0)
+  tl.to('#barra-cor', { height: 0, duration: 0.2 }, 4.2)
+  tl.to('#lower-third', { opacity: 0, duration: 0 }, 4.5)
+
+  if (window.__hf) {
+    window.__hf.registerFrameAdapter({
+      getDuration: () => DURATION,
+      seekToFrame: (frame) => tl.seek(frame / FPS)
+    })
+  } else {
+    tl.play()
+  }
+</script>
+</body>
+</html>
