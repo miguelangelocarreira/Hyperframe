@@ -31,6 +31,14 @@ PRESETS = {
         "colorbalance=rs=0.05:gs=0.02:bs=-0.05:rm=0.03:gm=0.0:bm=-0.03,"  # warm shadows
         "curves=master='0/0 0.1/0.07 0.9/0.93 1/1'"  # crush blacks
     ),
+    "hdr_to_sdr": (
+        "zscale=t=linear:npl=100,"
+        "format=gbrpf32le,"
+        "zscale=p=bt709,"
+        "tonemap=tonemap=hable:desat=0,"
+        "zscale=t=bt709:m=bt709:r=tv,"
+        "format=yuv420p"
+    ),
     "none": None,
 }
 

@@ -11,13 +11,21 @@ Uso:
 Formato EDL (edit/edl.json):
     {
       "source": "video.mp4",
-      "grade": "neutral_punch",       // opcional
+      "grade": "neutral_punch",       // opcional: subtle|neutral_punch|warm_cinematic|hdr_to_sdr|none
       "subtitles": true,              // opcional
+      "overlays": [                   // opcional: compostar overlays antes das legendas
+        {"source": "edit/overlay.mp4", "start": 5.0, "end": 10.0}
+      ],
       "segments": [
-        {"start": 0.0, "end": 45.2},
-        {"start": 46.8, "end": 89.5}
+        {"start": 0.0, "end": 45.2, "beat": "hook", "quote": "Hoje vou mostrar...", "reason": "strong opener"},
+        {"start": 46.8, "end": 89.5, "beat": "demo", "quote": "E o resultado...", "reason": "cut filler at 46.1s"}
       ]
     }
+
+    Campos editoriais por segmento (opcionais, ignorados pelo render):
+      beat   — tipo de momento: "hook", "demo", "cta", "b-roll", etc.
+      quote  — texto da transcrição coberto pelo segmento
+      reason — motivo do corte / o que foi removido antes deste segmento
 """
 
 import argparse
@@ -34,8 +42,18 @@ GRADE_PRESETS = {
         "eq=contrast=1.12:brightness=-0.02:saturation=1.15,"
         "colorbalance=rs=0.05:gs=0.02:bs=-0.05"
     ),
+    "hdr_to_sdr": (
+        "zscale=t=linear:npl=100,"
+        "format=gbrpf32le,"
+        "zscale=p=bt709,"
+        "tonemap=tonemap=hable:desat=0,"
+        "zscale=t=bt709:m=bt709:r=tv,"
+        "format=yuv420p"
+    ),
     "none": None,
 }
+
+HDR_FILTER = GRADE_PRESETS["hdr_to_sdr"]
 
 QUALITY = {
     "preview": {"scale": "1280:720", "preset": "ultrafast", "crf": "28"},
@@ -61,12 +79,15 @@ def extract_segment(
     grade_filter: str | None,
     quality: dict,
     pad_ms: int = 30,
+    hdr_filter: str | None = None,
 ) -> None:
-    """Extrai um segmento com fade de áudio e color grade opcional."""
+    """Extrai um segmento com fade de áudio, conversão HDR→SDR e color grade opcionais."""
     duration = end - start
     fade_dur = pad_ms / 1000
 
     vf_parts = []
+    if hdr_filter:
+        vf_parts.append(hdr_filter)
     if grade_filter:
         vf_parts.append(grade_filter)
     if quality["scale"] != "1920:1080":
@@ -91,6 +112,51 @@ def extract_segment(
 
     cmd.append(str(out))
     run(cmd, f"Extrair {start:.1f}s–{end:.1f}s → {out.name}")
+
+
+def apply_overlays(video_path: Path, overlays: list[dict], out: Path) -> None:
+    """Composita overlays sobre o vídeo base. Deve ser chamada ANTES das legendas (Regra 1)."""
+    extra_inputs = []
+    fc_parts = []
+    prev_label = "0:v"
+
+    for i, ov in enumerate(overlays):
+        source = Path(ov["source"])
+        if not source.exists():
+            print(f"Erro: overlay não encontrado: {source}", file=sys.stderr)
+            sys.exit(1)
+        start = float(ov["start"])
+        end = float(ov["end"])
+        if start >= end:
+            print(f"Aviso: overlay ignorado (start >= end): {source.name}")
+            continue
+
+        duration = end - start
+        input_idx = i + 1
+        out_label = f"tmp{i}" if i < len(overlays) - 1 else "outv"
+
+        extra_inputs += ["-i", str(source)]
+        fc_parts.append(
+            f"[{input_idx}:v]trim=duration={duration:.3f},"
+            f"setpts=PTS-STARTPTS+({start:.3f}/TB)[ov{i}];"
+            f"[{prev_label}][ov{i}]overlay=shortest=1[{out_label}]"
+        )
+        prev_label = out_label
+
+    if not fc_parts:
+        import shutil
+        shutil.copy2(video_path, out)
+        return
+
+    cmd = (
+        ["ffmpeg", "-y", "-i", str(video_path)]
+        + extra_inputs
+        + ["-filter_complex", ";".join(fc_parts)]
+        + ["-map", "[outv]", "-map", "0:a"]
+        + ["-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "copy"]
+        + [str(out)]
+    )
+    run(cmd, f"Overlays ({len(fc_parts)}) → {out.name}")
 
 
 def concat_segments(segment_files: list[Path], out: Path) -> None:
@@ -234,6 +300,7 @@ def main():
     parser.add_argument("--preview", action="store_true", help="Render rápido 720p")
     parser.add_argument("--hq", action="store_true", help="Render alta qualidade")
     parser.add_argument("--build-subtitles", action="store_true", help="Gerar e queimar legendas")
+    parser.add_argument("--hdr", action="store_true", help="Pré-processar HDR→SDR antes do grade")
     parser.add_argument("--edit-dir", default="edit", help="Diretório de trabalho")
     args = parser.parse_args()
 
@@ -261,6 +328,13 @@ def main():
     grade_name = edl.get("grade", "none")
     grade_filter = GRADE_PRESETS.get(grade_name)
 
+    hdr_filter = None
+    if args.hdr:
+        if grade_filter == HDR_FILTER:
+            print("Aviso: --hdr ignorado (grade 'hdr_to_sdr' já inclui a conversão).")
+        else:
+            hdr_filter = HDR_FILTER
+
     edit_dir = Path(args.edit_dir)
     edit_dir.mkdir(parents=True, exist_ok=True)
     out_path = Path(args.output)
@@ -275,7 +349,7 @@ def main():
 
         for i, seg in enumerate(segments):
             seg_out = tmp / f"seg_{i:03d}.mp4"
-            extract_segment(source, seg["start"], seg["end"], seg_out, grade_filter, quality)
+            extract_segment(source, seg["start"], seg["end"], seg_out, grade_filter, quality, hdr_filter=hdr_filter)
             seg_files.append(seg_out)
 
         # ── Estágio 2: concatenar ──
@@ -284,7 +358,14 @@ def main():
 
         working = concat_out
 
-        # ── Estágio 3: legendas (SEMPRE POR ÚLTIMO entre os overlays) ──
+        # ── Estágio 3: overlays ──
+        overlays = edl.get("overlays", [])
+        if overlays:
+            overlay_out = tmp / "with_overlays.mp4"
+            apply_overlays(working, overlays, overlay_out)
+            working = overlay_out
+
+        # ── Estágio 4: legendas (SEMPRE POR ÚLTIMO — Regra 1) ──
         if args.build_subtitles or edl.get("subtitles"):
             # Procurar transcrição
             transcript_path = edit_dir / "transcripts" / f"{source.stem}.json"
@@ -296,7 +377,7 @@ def main():
                 burn_subtitles(working, srt_path, sub_out)
                 working = sub_out
 
-        # ── Estágio 4: loudness ──
+        # ── Estágio 5: loudness ──
         loud_out = tmp / "loud.mp4"
         normalize_loudness(working, loud_out)
         working = loud_out
