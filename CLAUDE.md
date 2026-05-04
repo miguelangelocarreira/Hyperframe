@@ -9,6 +9,7 @@ Pipeline completo de edição de vídeo com IA: transcrição → cortes → mot
 | **ElevenLabs Scribe** | Transcrição word-level com timestamps |
 | **FFmpeg** | Cortes, color grade, concat, loudness |
 | **HyperFrames** | Motion graphics HTML→MP4 |
+| **Claude Vision** | Análise editorial de frames (analyze_visual.py) |
 | **Python helpers** | Orquestração do pipeline |
 
 ---
@@ -65,6 +66,22 @@ Exemplo de EDL que geras após aprovação (`edit/edl.json`):
   ]
 }
 ```
+
+### 4b. Análise visual com IA (opcional)
+Quando queres uma segunda opinião editorial sobre o clip antes de cortar:
+```bash
+# Análise com 6 frames (padrão)
+python helpers/analyze_visual.py video.mp4
+
+# Mais frames + contexto da transcrição + guardar resultado
+python helpers/analyze_visual.py video.mp4 \
+  --frames 10 \
+  --transcript edit/transcripts/video.json \
+  --output edit/visual_analysis.md
+```
+Requer `ANTHROPIC_API_KEY` no `.env`. O helper extrai frames distribuídos uniformemente,
+envia-os para Claude Vision e devolve análise com tipo de conteúdo, momentos notáveis
+e recomendações de corte concretas.
 
 ### 5. Color grade (opcional, antes do render)
 ```bash
