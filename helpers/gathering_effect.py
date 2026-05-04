@@ -238,14 +238,16 @@ def process(video_path: Path, preview: bool = False) -> Path:
     orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    # Dimensões de output
+    # Dimensões de output (libx264 exige dimensões pares)
     if preview:
         scale = 480 / orig_h
-        out_w, out_h = int(orig_w * scale), 480
+        out_w = (int(orig_w * scale) // 2) * 2  # garante número par
+        out_h = 480
         out_path = PREVIEW_OUT
         crf, preset = "28", "ultrafast"
     else:
-        out_w, out_h = orig_w, orig_h
+        out_w = (orig_w // 2) * 2
+        out_h = (orig_h // 2) * 2
         out_path = FINAL_OUT
         crf, preset = "18", "slow"
 
@@ -269,7 +271,7 @@ def process(video_path: Path, preview: bool = False) -> Path:
             "-r", str(fps),
             "-i", "pipe:0",
             "-an",  # sem áudio (adicionamos depois)
-            "-c:v", "libx264", "-crf", crf, "-preset", preset,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", crf, "-preset", preset,
             str(raw_video),
         ], stdin=subprocess.PIPE)
 
